@@ -1,6 +1,6 @@
 # Old School RuneScape Tutorial Island Completer
 
-A Python script that helps automate the Tutorial Island completion in Old School RuneScape by detecting red objects in the game window.
+A Python script that helps automate the Tutorial Island completion in Old School RuneScape by detecting red objects in the game window and automatically interacting with them.
 
 ## Features
 
@@ -8,6 +8,8 @@ A Python script that helps automate the Tutorial Island completion in Old School
 - Region of interest (ROI) monitoring
 - Visual feedback with bounding boxes
 - Coordinate finder tool for setting up monitoring regions
+- Smooth pixel-by-pixel mouse movement
+- Automatic double-click interaction with detected objects
 
 ## Requirements
 
@@ -21,8 +23,8 @@ A Python script that helps automate the Tutorial Island completion in Old School
 
 1. Clone this repository:
 ```bash
-git clone [repository-url]
-cd OldSchoolRunescapeTutorialIslandCompleter
+git clone https://github.com/GhostInTheToast/OSRSTutorialIslandBot.git
+cd OSRSTutorialIslandBot
 ```
 
 2. Install the required packages:
@@ -46,6 +48,10 @@ python color_detector.py
 
 - Press 'q' to quit the program
 - Press 'c' in the coordinate finder to capture coordinates
+- Press '1' to move the mouse to the largest detected red object and double-click it
+  - The mouse will move smoothly, pixel by pixel
+  - Movement speed is calculated based on distance
+  - Double-click is performed at the target location
 
 ## Note
 
