@@ -22,25 +22,47 @@ from Quartz import (
     CGDisplayCreateImage,
     CGRectMake
 )
+from pynput import keyboard
 
 # Set PyAutoGUI settings for safety
 pyautogui.FAILSAFE = True  # Move mouse to corner to stop
 pyautogui.PAUSE = 0.1  # Add small delay between actions
 
-def check_screen_permissions():
-    """Check if we have screen recording permissions"""
+# Global variables for keyboard control
+target_position = None
+should_quit = False
+
+def on_press(key):
+    global target_position, should_quit
     try:
-        # Try to capture a small portion of the screen
-        test_capture = pyautogui.screenshot(region=(0, 0, 100, 100))
+        if key.char == '1' and target_position:
+            print("\n🎯 Moving mouse to target...")
+            move_mouse_to_target(target_position[0], target_position[1], duration=0)
+        elif key.char == 'q':
+            should_quit = True
+    except AttributeError:
+        pass
+
+def on_release(key):
+    pass
+
+# Start keyboard listener
+listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+listener.start()
+
+def check_screen_permissions():
+    """Check if we have screen recording permissions."""
+    try:
+        # Try to capture a small region of the screen
+        pyautogui.screenshot(region=(0, 0, 1, 1))
         return True
     except Exception as e:
-        print("\n⚠️  Screen Recording Permission Required!")
-        print("Please follow these steps:")
-        print("1. Go to System Preferences > Security & Privacy > Privacy > Screen Recording")
-        print("2. Click the lock icon to make changes (you'll need to enter your password)")
-        print("3. Find Terminal or your IDE in the list and check the box next to it")
-        print("4. Restart Terminal or your IDE after granting permissions")
-        print("\nError details:", str(e))
+        print("\n❌ Screen recording permission not granted!")
+        print("Please grant screen recording permission to your terminal/Python environment:")
+        print("1. Open System Preferences")
+        print("2. Go to Security & Privacy > Privacy > Screen Recording")
+        print("3. Add your terminal application (Terminal.app or iTerm2)")
+        print("4. Restart your terminal and try again")
         return False
 
 def get_chrome_window():
@@ -61,56 +83,48 @@ def get_chrome_window():
 
 def capture_window(window_info):
     """Capture the content of the specified window."""
-    if window_info is None:
-        return None
-        
     try:
-        # Capture the screen region
-        screenshot = pyautogui.screenshot(region=(
-            window_info['x'],
-            window_info['y'],
-            window_info['width'],
-            window_info['height']
-        ))
+        print("\n🔍 Starting window capture process...")
         
-        # Convert to numpy array
-        frame = np.array(screenshot)
+        # Define the region of interest
+        roi_x1, roi_y1 = 343, 162  # Top-left corner
+        roi_x2, roi_y2 = 861, 504  # Bottom-right corner
+        roi_width = roi_x2 - roi_x1
+        roi_height = roi_y2 - roi_y1
+        print(f"🎯 ROI defined: ({roi_x1}, {roi_y1}) to ({roi_x2}, {roi_y2})")
         
-        # Convert from RGB to BGR (OpenCV format)
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # Get screen size
+        screen_width, screen_height = pyautogui.size()
+        print(f"📐 Screen dimensions: {screen_width}x{screen_height}")
+        
+        # Check if ROI is within screen bounds
+        if (roi_x1 < 0 or roi_y1 < 0 or 
+            roi_x2 > screen_width or roi_y2 > screen_height):
+            print(f"❌ ROI is outside screen bounds!")
+            return None
+            
+        # Capture the region using PyAutoGUI
+        print("📸 Capturing screen region...")
+        screenshot = pyautogui.screenshot(region=(roi_x1, roi_y1, roi_width, roi_height))
+        
+        # Convert to numpy array and then to BGR format
+        frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+        print(f"✅ Successfully captured region, shape: {frame.shape}")
         
         return frame
         
     except Exception as e:
-        print(f"\n⚠️  Error capturing window: {str(e)}")
+        print(f"\n⚠️  Unexpected error in capture_window: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
-def move_mouse_to_target(x, y, duration=1.0):
-    """Move mouse to target position smoothly, pixel by pixel."""
+def move_mouse_to_target(x, y, duration=0):
+    """Move mouse instantly to target position."""
     try:
-        # Get current mouse position
-        current_x, current_y = pyautogui.position()
-        
-        # Calculate total distance
-        total_distance = ((x - current_x) ** 2 + (y - current_y) ** 2) ** 0.5
-        
-        # Calculate number of steps (1 pixel per step)
-        steps = int(total_distance)
-        
-        # Calculate time per step
-        time_per_step = duration / steps if steps > 0 else 0
-        
-        # Move mouse pixel by pixel
-        for i in range(steps + 1):
-            # Calculate intermediate position
-            intermediate_x = current_x + (x - current_x) * (i / steps)
-            intermediate_y = current_y + (y - current_y) * (i / steps)
-            
-            # Move to intermediate position
-            pyautogui.moveTo(intermediate_x, intermediate_y)
-            time.sleep(time_per_step)
-            
-        # Double click at the final position
+        # Move directly to target position
+        pyautogui.moveTo(x, y, duration=0)
+        # Double click at the position
         pyautogui.doubleClick()
         print(f"\rDouble clicked at position ({x}, {y})", end='')
         
@@ -118,6 +132,7 @@ def move_mouse_to_target(x, y, duration=1.0):
         print(f"\n⚠️  Error during mouse movement: {str(e)}")
 
 def detect_red():
+    global target_position, should_quit
     # Define the region of interest
     roi_x1, roi_y1 = 343, 162  # Top-left corner
     roi_x2, roi_y2 = 861, 504  # Bottom-right corner
@@ -138,17 +153,11 @@ def detect_red():
     print("The window will show the 2004Scape game window with green boxes around red objects")
     
     last_position = None
-    target_position = None
     
-    while True:
+    while not should_quit:
         try:
             # Capture the screen region
-            frame = capture_window({
-                'x': roi_x1,
-                'y': roi_y1,
-                'width': roi_width,
-                'height': roi_height
-            })
+            frame = capture_window(None)
             
             if frame is None:
                 print("⚠️  Failed to capture window content")
@@ -172,7 +181,7 @@ def detect_red():
             
             # Find the largest red object
             largest_contour = None
-            max_area = 50  # Minimum area threshold
+            max_area = 2  # Minimum area threshold
             
             for contour in contours:
                 area = cv2.contourArea(contour)
@@ -192,26 +201,22 @@ def detect_red():
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 
                 # Calculate center point of the box
-                center_x = x + w//2 + roi_x1
-                center_y = y + h//2 + roi_y1
+                center_x = x + w//2 + 343  # Add ROI offset
+                center_y = y + h//2 + 162  # Add ROI offset
                 target_position = (center_x, center_y)
                 
                 # Only print if position has changed significantly
-                current_position = (x + roi_x1, y + roi_y1)
+                current_position = (x + 343, y + 162)  # Add ROI offset
                 if last_position is None or abs(current_position[0] - last_position[0]) > 5 or abs(current_position[1] - last_position[1]) > 5:
-                    print(f"\rLargest red object: area={max_area:.1f}, position=({x + roi_x1}, {y + roi_y1}), size={w}x{h}", end='')
+                    print(f"\rLargest red object: area={max_area:.1f}, position=({current_position[0]}, {current_position[1]}), size={w}x{h}", end='')
                     last_position = current_position
             
             # Show the result
             cv2.imshow('2004Scape Game - Red Color Detection', frame)
             
-            # Check for key presses
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
+            # Check for quit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            elif key == ord('1') and target_position:
-                print("\n🎯 Moving mouse to target...")
-                move_mouse_to_target(target_position[0], target_position[1])
                 
         except Exception as e:
             print(f"\n⚠️  Error during screen capture: {str(e)}")
@@ -219,13 +224,14 @@ def detect_red():
             break
     
     cv2.destroyAllWindows()
+    listener.stop()
 
 if __name__ == "__main__":
     print("🔍 2004Scape Game Red Color Detection Tool")
     print("=======================================")
     
     if not check_screen_permissions():
-        sys.exit(1)
+        exit(1)
         
     print("\n⏳ Starting in 3 seconds...")
     time.sleep(3)
