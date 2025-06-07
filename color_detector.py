@@ -17,8 +17,15 @@ from Quartz import (
     CGImageGetWidth,
     CGImageGetHeight,
     CGImageGetBytesPerRow,
-    CGImageGetBitsPerPixel
+    CGImageGetBitsPerPixel,
+    CGMainDisplayID,
+    CGDisplayCreateImage,
+    CGRectMake
 )
+
+# Set PyAutoGUI settings for safety
+pyautogui.FAILSAFE = True  # Move mouse to corner to stop
+pyautogui.PAUSE = 0.1  # Add small delay between actions
 
 def check_screen_permissions():
     """Check if we have screen recording permissions"""
@@ -37,107 +44,78 @@ def check_screen_permissions():
         return False
 
 def get_chrome_window():
-    """Get the position and size of the Chrome window"""
-    try:
-        print("\n🔍 Searching for windows...")
-        # Get window information using Quartz
-        window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
-        
-        print(f"Found {len(window_list)} windows:")
-        for window in window_list:
-            if 'kCGWindowName' in window:
-                print(f"- {window['kCGWindowName']}")
-        
-        # Find the 2004Scape window (not the detection window)
-        for window in window_list:
-            if 'kCGWindowName' in window and '2004Scape Game' in window['kCGWindowName'] and 'Red Color Detection' not in window['kCGWindowName']:
-                print(f"\n✅ Found matching window: {window['kCGWindowName']}")
-                try:
-                    # Get window bounds and window ID
-                    bounds = window.get('kCGWindowBounds', {})
-                    window_id = window.get('kCGWindowNumber', 0)
-                    if bounds:
-                        x = int(bounds.get('X', 0))
-                        y = int(bounds.get('Y', 0))
-                        width = int(bounds.get('Width', 0))
-                        height = int(bounds.get('Height', 0))
-                        print(f"Window details: left={x}, top={y}, width={width}, height={height}, id={window_id}")
-                        return {
-                            'left': x, 
-                            'top': y, 
-                            'width': width, 
-                            'height': height,
-                            'id': window_id
-                        }
-                            
-                except Exception as e:
-                    print(f"⚠️  Error getting window object: {str(e)}")
-                    return None
-        
-        print("\n⚠️  Chrome window not found!")
-        print("Please make sure the 2004Scape game window is open and visible.")
-        return None
-            
-    except Exception as e:
-        print(f"\n⚠️  Error finding Chrome window: {str(e)}")
-        return None
+    """Get the Chrome window information."""
+    window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+    for window in window_list:
+        if window.get('kCGWindowOwnerName', '') == 'Google Chrome':
+            # Get window bounds
+            bounds = window.get('kCGWindowBounds', {})
+            if bounds:
+                return {
+                    'x': int(bounds['X']),
+                    'y': int(bounds['Y']),
+                    'width': int(bounds['Width']),
+                    'height': int(bounds['Height'])
+                }
+    return None
 
 def capture_window(window_info):
-    """Capture only the specific window's content"""
+    """Capture the content of the specified window."""
+    if window_info is None:
+        return None
+        
     try:
-        # Create a CGRect for the window
-        rect = CGRectNull
+        # Capture the screen region
+        screenshot = pyautogui.screenshot(region=(
+            window_info['x'],
+            window_info['y'],
+            window_info['width'],
+            window_info['height']
+        ))
         
-        # Calculate aspect ratio
-        aspect_ratio = window_info['width'] / window_info['height']
-        print(f"Target aspect ratio: {aspect_ratio:.2f}")
+        # Convert to numpy array
+        frame = np.array(screenshot)
         
-        # Capture the window content using its ID
-        image = CGWindowListCreateImage(
-            rect,
-            kCGWindowListOptionIncludingWindow,
-            window_info['id'],
-            kCGWindowListOptionOnScreenOnly
-        )
+        # Convert from RGB to BGR (OpenCV format)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
-        if image:
-            # Get image properties
-            width = CGImageGetWidth(image)
-            height = CGImageGetHeight(image)
-            bytes_per_row = CGImageGetBytesPerRow(image)
-            bits_per_pixel = CGImageGetBitsPerPixel(image)
-            
-            print(f"Raw capture dimensions: {width}x{height}")
-            
-            # Get the image data
-            data_provider = CGImageGetDataProvider(image)
-            data = CGDataProviderCopyData(data_provider)
-            
-            # Convert to numpy array
-            frame = np.frombuffer(data, dtype=np.uint8).reshape(height, bytes_per_row // 4, 4)
-            # Crop to actual width (remove padding)
-            frame = frame[:, :width, :]
-            
-            # Calculate new height based on aspect ratio
-            new_height = int(window_info['width'] / aspect_ratio)
-            print(f"Calculated new height: {new_height}")
-            
-            # Resize to match the window's original dimensions while maintaining aspect ratio
-            frame = cv2.resize(frame, (window_info['width'], new_height), 
-                             interpolation=cv2.INTER_LINEAR)
-            
-            print(f"Final dimensions: {frame.shape[1]}x{frame.shape[0]}")
-            
-            # Convert from RGBA to BGR (fix color channels)
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-            return frame
+        return frame
+        
     except Exception as e:
-        print(f"⚠️  Error capturing window: {str(e)}")
-        print("Debug info:")
-        print(f"Window info: {window_info}")
-        print(f"Captured dimensions: {width}x{height}")
-        print(f"Expected dimensions: {window_info['width']}x{window_info['height']}")
-    return None
+        print(f"\n⚠️  Error capturing window: {str(e)}")
+        return None
+
+def move_mouse_to_target(x, y, duration=1.0):
+    """Move mouse to target position smoothly, pixel by pixel."""
+    try:
+        # Get current mouse position
+        current_x, current_y = pyautogui.position()
+        
+        # Calculate total distance
+        total_distance = ((x - current_x) ** 2 + (y - current_y) ** 2) ** 0.5
+        
+        # Calculate number of steps (1 pixel per step)
+        steps = int(total_distance)
+        
+        # Calculate time per step
+        time_per_step = duration / steps if steps > 0 else 0
+        
+        # Move mouse pixel by pixel
+        for i in range(steps + 1):
+            # Calculate intermediate position
+            intermediate_x = current_x + (x - current_x) * (i / steps)
+            intermediate_y = current_y + (y - current_y) * (i / steps)
+            
+            # Move to intermediate position
+            pyautogui.moveTo(intermediate_x, intermediate_y)
+            time.sleep(time_per_step)
+            
+        # Double click at the final position
+        pyautogui.doubleClick()
+        print(f"\rDouble clicked at position ({x}, {y})", end='')
+        
+    except Exception as e:
+        print(f"\n⚠️  Error during mouse movement: {str(e)}")
 
 def detect_red():
     # Define the region of interest
@@ -156,28 +134,28 @@ def detect_red():
     print("\n🎯 Starting red color detection...")
     print(f"Monitoring region: ({roi_x1}, {roi_y1}) to ({roi_x2}, {roi_y2})")
     print("Press 'q' to stop the program")
+    print("Press '1' to move mouse to the largest red object")
     print("The window will show the 2004Scape game window with green boxes around red objects")
     
     last_position = None
+    target_position = None
     
     while True:
         try:
-            # Get Chrome window
-            window_info = get_chrome_window()
-            if window_info is None:
-                break
-                
-            # Capture only the window content
-            frame = capture_window(window_info)
+            # Capture the screen region
+            frame = capture_window({
+                'x': roi_x1,
+                'y': roi_y1,
+                'width': roi_width,
+                'height': roi_height
+            })
+            
             if frame is None:
                 print("⚠️  Failed to capture window content")
                 break
             
-            # Extract the region of interest
-            roi = frame[roi_y1:roi_y2, roi_x1:roi_x2]
-            
             # Convert to HSV
-            hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             
             # Create masks for both red ranges
             mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
@@ -211,7 +189,12 @@ def detect_red():
             # Draw rectangle only for the largest red object
             if largest_contour:
                 x, y, w, h, avg_hsv = largest_contour
-                cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                
+                # Calculate center point of the box
+                center_x = x + w//2 + roi_x1
+                center_y = y + h//2 + roi_y1
+                target_position = (center_x, center_y)
                 
                 # Only print if position has changed significantly
                 current_position = (x + roi_x1, y + roi_y1)
@@ -222,9 +205,13 @@ def detect_red():
             # Show the result
             cv2.imshow('2004Scape Game - Red Color Detection', frame)
             
-            # Check for 'q' key press to exit
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            # Check for key presses
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
                 break
+            elif key == ord('1') and target_position:
+                print("\n🎯 Moving mouse to target...")
+                move_mouse_to_target(target_position[0], target_position[1])
                 
         except Exception as e:
             print(f"\n⚠️  Error during screen capture: {str(e)}")
