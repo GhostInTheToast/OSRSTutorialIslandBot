@@ -1,58 +1,68 @@
-# Old School RuneScape Tutorial Island Completer
+# Old School RuneScape Tutorial Island Bot
 
-A Python script that helps automate the Tutorial Island completion in Old School RuneScape by detecting red objects in the game window and automatically interacting with them.
+This project aims to automate the Tutorial Island experience in Old School RuneScape (2004Scape) using computer vision and automation techniques.
 
 ## Features
 
-- Real-time red object detection in the game window
-- Region of interest (ROI) monitoring
-- Visual feedback with bounding boxes
-- Coordinate finder tool for setting up monitoring regions
-- Smooth pixel-by-pixel mouse movement
-- Automatic double-click interaction with detected objects
+### Color Detection Tool
+- Real-time detection of red objects in the game window
+- Automatic mouse movement to the largest detected red object
+- Visual feedback with green bounding boxes around detected objects
+- Configurable detection region and sensitivity
 
 ## Requirements
 
-- Python 3.x
+- Python 3.8+
 - OpenCV
-- PyAutoGUI
-- Quartz (for macOS)
 - NumPy
+- PyAutoGUI
+- Pynput
 
 ## Installation
 
-1. Clone this repository:
+1. Clone the repository:
 ```bash
 git clone https://github.com/GhostInTheToast/OSRSTutorialIslandBot.git
 cd OSRSTutorialIslandBot
 ```
 
-2. Install the required packages:
+2. Create and activate a virtual environment:
+```bash
+python -m venv osrsBotting
+source osrsBotting/bin/activate  # On Windows: osrsBotting\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-1. Run the coordinate finder to determine the region you want to monitor:
-```bash
-python coordinate_finder.py
-```
-
-2. Run the color detector with your chosen coordinates:
+### Color Detection Tool
+Run the color detection script:
 ```bash
 python color_detector.py
 ```
 
-## Controls
-
+Controls:
+- Press '1' to move the mouse to the largest red object
 - Press 'q' to quit the program
-- Press 'c' in the coordinate finder to capture coordinates
-- Press '1' to move the mouse to the largest detected red object and double-click it
-  - The mouse will move smoothly, pixel by pixel
-  - Movement speed is calculated based on distance
-  - Double-click is performed at the target location
 
-## Note
+The tool will:
+1. Monitor the specified region of the game window
+2. Detect red objects in real-time
+3. Display green boxes around detected objects
+4. Move the mouse to the largest red object when requested
 
-Make sure to grant screen recording permissions to your terminal/IDE on macOS for the script to work properly. 
+## Development Status
+
+Currently in active development. The color detection tool is functional and can be used to detect and interact with red objects in the game window.
+
+## Contributing
+
+Feel free to submit issues and enhancement requests!
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details. 
